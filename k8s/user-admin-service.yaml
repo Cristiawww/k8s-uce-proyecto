@@ -3,9 +3,10 @@ kind: Service
 metadata:
   name: user-admin
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: user-admin
   ports:
-    - port: 6000
-      targetPort: 6000
+    - port: 6000        # puerto del Service dentro del cluster
+      targetPort: 6000  # puerto del contenedor Flask
+      nodePort: 30081   # puerto en tu host (localhost)

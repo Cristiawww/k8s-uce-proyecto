@@ -3,9 +3,10 @@ kind: Service
 metadata:
   name: auth-service
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: auth-service
   ports:
-    - port: 5000
-      targetPort: 5000
+    - port: 5000        # puerto del Service dentro del cluster
+      targetPort: 5000  # puerto del contenedor Flask
+      nodePort: 30080   # puerto en tu host (localhost)
