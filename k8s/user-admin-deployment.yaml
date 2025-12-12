@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-admin
+  template:
+    metadata:
+      labels:
+        app: user-admin
+    spec:
+      containers:
+        - name: user-admin
+          image: cristianara/user-admin:v1
+          ports:
+            - containerPort: 6000
