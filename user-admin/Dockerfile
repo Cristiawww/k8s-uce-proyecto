@@ -1,11 +1,12 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY app.py /app
-COPY templates /app/templates
 
-RUN pip install flask
+# Copiar requirements e instalar dependencias
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 6000
+# Copiar el resto del código de la app
+COPY . .
 
 CMD ["python", "app.py"]

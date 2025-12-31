@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
 
@@ -24,6 +24,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -46,14 +47,44 @@ def login():
     else:
         return render_template("login.html", error="Invalid credentials")
 
+
+# NUEVO: endpoint para crear usuarios desde user-admin
+@app.route("/users", methods=["POST"])
+def create_user():
+    data = request.get_json() or {}
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "username and password are required"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            (username, password),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # usuario ya existe
+        conn.close()
+        return jsonify({"error": "user already exists"}), 409
+
+    conn.close()
+    return jsonify({"message": "user created"}), 201
+
+
 @app.route("/")
 def root():
     return render_template("login.html", error=None)
+
 
 @app.route("/welcome")
 def welcome():
     username = request.args.get("user", "usuario")
     return render_template("welcome.html", username=username)
+
 
 if __name__ == "__main__":
     init_db()
