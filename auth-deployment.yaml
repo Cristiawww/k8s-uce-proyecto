@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-admin
+  template:
+    metadata:
+      labels:
+        app: user-admin
+    spec:
+      containers:
+      - name: user-admin
+        image: localhost:5000/user-admin-k8s:v2  # ← v2 nueva
+        ports:
+        - containerPort: 6000
+        env:
+        - name: POSTGRES_URL
+          value: "postgresql://adminuser:MiProyecto123@postgres:5432/uce"
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-admin
+spec:
+  type: NodePort
+  selector:
+    app: user-admin
+  ports:
+  - port: 6000
+    targetPort: 6000
+    nodePort: 30081  # Fijo opcional

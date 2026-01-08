@@ -1,99 +1,202 @@
 import os
-import requests
-from flask import Flask, request, render_template_string
+import sqlite3
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from werkzeug.security import generate_password_hash
 
 app = Flask(__name__)
-AUTH_SERVICE_URL = "http://localhost:5001"  # auth-service (local dev)
+app.secret_key = os.environ.get('SECRET_KEY', 'uce-k8s-project-2025')
+
+POSTGRES_URL = os.environ.get('POSTGRES_URL')
+DB_PATH = '/app/data/users.db'  # Volumen compartido
+
+
+
+def get_db_connection():
+    """Prefer PostgreSQL → fallback SQLite"""
+    if POSTGRES_URL and PSYCOPG2_AVAILABLE:
+        try:
+            return psycopg2.connect(POSTGRES_URL, cursor_factory=RealDictCursor)
+        except Exception as e:
+            print(f"❌ PostgreSQL error, switching to SQLite: {e}")
+
+    print("✅ Using SQLite database")
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if PSYCOPG2_AVAILABLE and POSTGRES_URL:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(20) UNIQUE NOT NULL,
+                first_name VARCHAR(100) NOT NULL,
+                last_name VARCHAR(100) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ Database ready")
+
 
 def generate_username(first_name, last_name):
-    """Acrónimo 6-8 chars: pri3nom + pri4apell"""
     name_short = first_name[:3].lower()
     last_short = last_name[:4].lower()
     username = f"{name_short}{last_short}"
-    return username[:8]  # Máx 8 chars
 
-@app.route('/', methods=['GET', 'POST'])
-def add_user():
-    if request.method == 'POST':
-        first_name = request.form['first_name'].strip()
-        last_name = request.form['last_name'].strip()
-        email = request.form['email'].strip()
-        
-        username = generate_username(first_name, last_name)
-        password = request.form.get('password', username.upper())  # Password = USERNAME.MAYUS si vacío
-        
-        # Enviar a auth-service
-        resp = requests.post(
-            f"{AUTH_SERVICE_URL}/register",
-            data={'username': username, 'password': password},
-            timeout=5
-        )
-        
-        if resp.status_code == 200:
-            return f'''
-            <div style="background:#27ae60;color:white;padding:30px;text-align:center;font-size:20px;border-radius:15px;">
-                ✅ Usuario CREADO!<br>
-                <b>Usuario:</b> <code>{username}</code><br>
-                <b>Password:</b> <code>{password}</code><br><br>
-                <a href="/" style="color:#fff;background:#2a5298;padding:12px 24px;border-radius:8px;text-decoration:none;">← Nuevo Usuario</a>
-            </div>
-            '''
-        return '''
-        <div style="background:#e74c3c;color:white;padding:30px;text-align:center;font-size:20px;border-radius:15px;">
-            ❌ Error creando usuario. Verifica que auth-service esté en localhost:5001
-        </div>
-        '''
-    
-    return '''
-<!DOCTYPE html>
-<html>
-<head><title>Agregar Usuario - UCE</title>
-<style>
-    *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-    .header{position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#1e3c72,#2a5298);color:white;padding:15px 0;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.3);z-index:1000;}
-    .header h1{font-size:22px;font-weight:300;letter-spacing:1px;}
-    .form-container{background:rgba(255,255,255,0.95);padding:40px;border-radius:15px;box-shadow:0 15px 35px rgba(0,0,0,0.2);width:100%;max-width:420px;margin:100px 20px 20px;backdrop-filter:blur(10px);}
-    .form-title{text-align:center;color:#2a5298;font-size:26px;margin-bottom:30px;font-weight:600;}
-    .form-group{margin-bottom:22px;}
-    .form-group input{width:100%;padding:15px 18px;border:2px solid #e1e5e9;border-radius:10px;font-size:16px;transition:all 0.3s;background:#f8f9fa;}
-    .form-group input:focus{outline:none;border-color:#2a5298;box-shadow:0 0 0 3px rgba(42,82,152,0.1);background:white;transform:translateY(-2px);}
-    .add-btn{width:100%;padding:16px;background:linear-gradient(90deg,#2a5298,#1e3c72);color:white;border:none;border-radius:10px;font-size:18px;font-weight:600;cursor:pointer;transition:all 0.3s;text-transform:uppercase;}
-    .add-btn:hover{transform:translateY(-3px);box-shadow:0 10px 25px rgba(42,82,152,0.4);}
-    .auth-link{text-align:center;margin-top:25px;}
-    .auth-link a{color:#2a5298;text-decoration:none;font-weight:500;font-size:16px;}
-</style>
-</head>
-<body>
-<div class="header">
-    <h1>UNIVERSIDAD CENTRAL DEL ECUADOR</h1>
-    <p>ADMIN USUARIOS</p>
-</div>
-<div class="form-container">
-    <h2 class="form-title">Agregar Nuevo Usuario</h2>
-    <form method="POST">
-        <div class="form-group">
-            <input name="first_name" placeholder="Nombres" required>
-        </div>
-        <div class="form-group">
-            <input name="last_name" placeholder="Apellidos" required>
-        </div>
-        <div class="form-group">
-            <input name="email" type="email" placeholder="Correo Electrónico">
-        </div>
-        <div class="form-group">
-            <input name="password" type="password" placeholder="Contraseña (opcional, auto si vacío)">
-        </div>
-        <button class="add-btn">Agregar Usuario</button>
-    </form>
-    <div class="auth-link">
-        <a href="http://localhost:5001">← Ir a Login</a>
-    </div>
-</div>
-</body>
-</html>
-    '''
+    if len(username) > 7:
+        username = username[:7]
+    elif len(username) < 5:
+        username += "01"
 
-if __name__ == '__main__':
-    print("🚀 User-Admin → localhost:6001")
+    username = ''.join(c for c in username if c.isalnum())
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Pick correct placeholder depending on DB
+    if PSYCOPG2_AVAILABLE and POSTGRES_URL:
+        query = "SELECT 1 FROM users WHERE username = %s"
+    else:
+        query = "SELECT 1 FROM users WHERE username = ?"
+
+    original = username
+    counter = 1
+
+    while True:
+        cur.execute(query, (username,))
+        if not cur.fetchone():
+            break
+        username = f"{original[:5]}{counter}"
+        counter += 1
+
+    cur.close()
+    conn.close()
+    return username
+
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    success_username = None
+
+    if request.method == "POST":
+        first_name = request.form.get("first_name")
+        last_name = request.form.get("last_name")
+        email = request.form.get("email")
+        password = request.form.get("password")
+        confirm_password = request.form.get("confirm_password")
+
+        # VALIDATIONS
+        if not all([first_name, last_name, email, password, confirm_password]):
+            flash("All fields are required.", "error")
+
+        elif password != confirm_password:
+            flash("Passwords do not match.", "error")
+
+        elif len(password) < 8:
+            flash("Password must be at least 8 characters.", "error")
+
+        elif not email.endswith("@uce.edu.ec"):
+            flash("Institutional email @uce.edu.ec is required.", "error")
+
+        else:
+            username = generate_username(first_name, last_name)
+
+            try:
+                conn = get_db_connection()
+                cur = conn.cursor()
+                password_hash = generate_password_hash(password)
+
+                # Pick correct INSERT placeholder
+                if PSYCOPG2_AVAILABLE and POSTGRES_URL:
+                    query = """
+                        INSERT INTO users (username, first_name, last_name, email, password_hash)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """
+                else:
+                    query = """
+                        INSERT INTO users (username, first_name, last_name, email, password_hash)
+                        VALUES (?, ?, ?, ?, ?)
+                    """
+
+                cur.execute(query, (username, first_name, last_name, email, password_hash))
+                conn.commit()
+
+                flash(f"User '{username}' successfully created!", "success")
+                success_username = username
+
+            except Exception as e:
+                flash(f"Error creating user: {str(e)}", "error")
+
+            finally:
+                cur.close()
+                conn.close()
+
+        return render_template("manage_users.html", success_username=success_username)
+
+    return render_template("manage_users.html")
+
+
+@app.route("/users", methods=["GET"])
+def list_users():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id, username, first_name, last_name, email, created_at FROM users ORDER BY created_at DESC")
+    users = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    users_list = []
+
+    for user in users:
+        if isinstance(user, dict):
+            users_list.append(user)
+        else:
+            users_list.append({
+                "id": user[0],
+                "username": user[1],
+                "first_name": user[2],
+                "last_name": user[3],
+                "email": user[4],
+                "created_at": user[5]
+            })
+
+    return jsonify(users_list)
+
+
+@app.route("/login")
+def login_link():
+    return redirect("http://127.0.0.1:57285")
+
+
+if __name__ == "__main__":
+    init_db()
     app.run(host="0.0.0.0", port=6000, debug=True)
