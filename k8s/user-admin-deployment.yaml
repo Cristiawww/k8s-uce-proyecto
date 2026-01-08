@@ -14,7 +14,9 @@ spec:
     spec:
       containers:
       - name: user-admin
-        image: cristianara/user-admin-k8s:v1
+        image: user-admin-k8s:v12
+        imagePullPolicy: IfNotPresent
+
         env:
         - name: POSTGRES_URL
           value: "postgresql://adminuser:MiProyecto123@postgres:5432/uce"

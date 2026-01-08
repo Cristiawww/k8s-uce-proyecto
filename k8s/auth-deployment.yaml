@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: cristianara/auth-service-k8s:v1
+        image: auth-service-k8s:v12
+        imagePullPolicy: IfNotPresent
         env:
         - name: POSTGRES_URL
           value: "postgresql://adminuser:MiProyecto123@postgres:5432/uce"
