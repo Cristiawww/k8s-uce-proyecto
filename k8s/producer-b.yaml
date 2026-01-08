@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer-b
+  template:
+    metadata:
+      labels:
+        app: producer-b
+    spec:
+      containers:
+      - name: producer
+        image: quay.io/strimzi/kafka:0.49.1-kafka-4.1.1
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "my-cluster-kafka-bootstrap.kafka:9092"
+        - name: KAFKA_TOPIC
+          value: "my-topic"
+        command: ["/bin/bash","-c"]
+        args:
+        - |
+          while true; do
+            echo "$(date -Iseconds) producer-b msg-$RANDOM"
+            sleep 3
+          done | bin/kafka-console-producer.sh --bootstrap-server "$KAFKA_BOOTSTRAP_SERVERS" --topic "$KAFKA_TOPIC"

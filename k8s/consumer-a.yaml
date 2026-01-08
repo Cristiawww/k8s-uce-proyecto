@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-a
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer-a
+  template:
+    metadata:
+      labels:
+        app: consumer-a
+    spec:
+      containers:
+      - name: consumer
+        image: quay.io/strimzi/kafka:0.49.1-kafka-4.1.1
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "my-cluster-kafka-bootstrap.kafka:9092"
+        - name: KAFKA_TOPIC
+          value: "my-topic"
+        - name: KAFKA_GROUP_ID
+          value: "group-a"
+        command: ["/bin/bash","-c"]
+        args:
+        - |
+          bin/kafka-console-consumer.sh --bootstrap-server "$KAFKA_BOOTSTRAP_SERVERS" --topic "$KAFKA_TOPIC" --group "$KAFKA_GROUP_ID" --from-beginning
