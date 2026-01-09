@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: db-migrate-
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: postgres:15
+        env:
+        - name: PGPASSWORD
+          value: "MiProyecto123"
+        command: ["sh","-c"]
+        args:
+        - >
+          psql -h postgres -U adminuser -d uce -v ON_ERROR_STOP=1 -c "
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+          ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+          ";
